@@ -9,6 +9,7 @@ zlib-deflated RGBA rows (opaque). The build packs hud/ into hud.pack; previews.j
     # the app's bench must be running (node bench/server.js <app>, BENCH_PORT=...)
     uv run -q --with pillow python -I tools/previews.py cluster_themes 8078
     ... idrive_hud_widgets 8079
+    ... cluster_themes 8078 runway        # only the layouts named (comma list)
 
 The bench's settings are put back afterwards. The raw shots are kept in ../design/previews-src/<app>/.
 """
@@ -78,6 +79,8 @@ def main():
     target = spec.get('config', {}).get('target', 'hud')
     sz = SIZES['panel' if target == 'panel' else 'hud']
     layouts = [o[0] for o in next(s for s in spec['settings'] if s['key'] == 'hudLayout')['options'] if o[0] not in SKIP]
+    if len(sys.argv) > 3:            # only these layouts (comma list), e.g. a new theme's picture alone
+        layouts = [n for n in layouts if n in sys.argv[3].split(',')]
     data = os.path.join(ROOT, 'bench', '.data', app, 'settings.json')
     saved = json.load(open(data)) if os.path.exists(data) else {}
     defaults = {s['key']: s.get('default') for s in spec['settings']}

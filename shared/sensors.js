@@ -6,6 +6,7 @@
  *   {{slotUnit:<id>}}  the unit, upper case {{slotSuffix:<id>}} '°' for temperatures, else nothing
  *   {{slotHeadU:<id>}} the name and, unless the value carries a °, its unit ("FUEL %": a slot with no unit box)
  *   {{slotHeadS:<id>}} the short name where a theme has less room ("short", else the name: M's slot rows)
+ *   {{slotTitle:<id>}} the name in title case ("Power": Runway's rings)
  * The pick per layout and slot is kept in <data>/slots.json (hud.js slotSensor / setSlot).
  *
  * Each sensor: id, name (the page), cat (the page's chips), head (upper case, the cluster's heading fonts), tok (a

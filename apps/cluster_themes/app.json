@@ -1,8 +1,8 @@
 {
   "id": "cluster_themes",
   "title": "Cluster Themes",
-  "description": "Redraws the instrument cluster: GT3 race dash, M-style, M view, Vector (with a music panel), Sport, Minimal, Track, Drag, Rally, Retro 80s, Cruise, Dyno (BMW-coloured readout tiles) or Ribbon (with holiday editions), with shift lights, boost, temps, tyres, a G-meter and a 0-60 timer",
-  "version": "0.19.0",
+  "description": "Redraws the instrument cluster: GT3 race dash, M-style, M view, Vector (with a music panel), Sport, Minimal, Track, Drag, Rally, Retro 80s, Cruise, Dyno (BMW-coloured readout tiles), Ribbon (with holiday editions) or Runway (twin rev bars in perspective), with shift lights, boost, temps, tyres, a G-meter and a 0-60 timer",
+  "version": "0.20.0",
   "vendor": "custom",
   "loggingId": "OAC1",
   "iconGlyph": "CLU",
@@ -173,6 +173,10 @@
           "Ribbon"
         ],
         [
+          "runway",
+          "Runway"
+        ],
+        [
           "grid",
           "Calibration grid"
         ],
@@ -249,6 +253,10 @@
         [
           "ribbon",
           "Ribbon"
+        ],
+        [
+          "runway",
+          "Runway"
         ]
       ]
     },
@@ -313,6 +321,10 @@
         [
           "ribbon",
           "Ribbon"
+        ],
+        [
+          "runway",
+          "Runway"
         ]
       ]
     },
@@ -377,6 +389,10 @@
         [
           "ribbon",
           "Ribbon"
+        ],
+        [
+          "runway",
+          "Runway"
         ]
       ]
     },
@@ -865,6 +881,22 @@
         [
           4,
           "4 s"
+        ]
+      ]
+    },
+    {
+      "key": "runwayLeft",
+      "label": "Runway: left panel",
+      "type": "choice",
+      "default": "gmeter",
+      "options": [
+        [
+          "gmeter",
+          "G-meter"
+        ],
+        [
+          "readouts",
+          "Four readouts"
         ]
       ]
     },
