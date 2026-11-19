@@ -1739,4 +1739,193 @@ void main() {
 }
 `;
 
-module.exports = { shiftbar: SHIFTBAR, arc: ARC, revbar: REVBAR, lights: LIGHTS, fill: FILL, box: BOX, grid: GRID, segbar: SEGBAR, mdash: MDASH, mtach: MTACH, sdash: SDASH, boxes: BOXES, atext: ATEXT, meter: METER, gmeter: GMETER, revarc: REVARC, tiles: TILES, ribbon: RIBBON, deco: DECO, mview: MVIEW, vdash: VDASH };
+const RUNWAY = `// The Runway theme in one cluster-render "effect" layer (GLSL ES 1.00): black, two rev bars that lean apart towards
+// the driver like a runway in perspective (u_bar: the left bar's outer and inner x at the top and the bottom, rows u_barY
+// .x .. .y; the right bar is its mirror about u_barY.z). Each bar, after the Audi-style "runway" view: a thick glossy
+// white rail up the outer edge that rounds into the top, an inner rail in one piece per thousand, each topped by a hook
+// into the column at its tick, a thin line outside each side (the outer one with a short tick per thousand), the
+// numbers 1 .. u_n on the outer part (glyphs from the R8 atlas u_font: u_grid columns x rows, digit 0 at code u_cell.y,
+// a cell's width / height u_cell.x), a carbon weave column on the inner part with a tick per thousand across it (the
+// scale runs to u_n + 0.5, spaced by PERSP so the near thousands are longer), and the red zone from u_redFrom
+// (thousands) under a thick red bar: rails and lines red, red dots in the column, dark red under the number. Lit from
+// the far end down to the revs (u_val, thousands): white, the numbers dark (u_ink); the red zone bright red. Then two ring gauges (u_ring: centre, radius, value
+// 0..1, lit clockwise from 6 o'clock), two segmented bars (u_mtr: left x, y, width, value) and thin lines (u_line,
+// u_nline of them). u_flash 1: the lit part in the shift red. v_uv (0,0) is the top-left; layer px = panel px.
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+varying vec2 v_uv;
+uniform vec2 u_size;
+uniform vec4 u_bar;        // left bar: outer x top, inner x top, outer x bottom, inner x bottom
+uniform vec3 u_barY;       // top y, bottom y, the mirror line x
+uniform float u_val;       // revs, in thousands
+uniform float u_n;         // thousands on the scale
+uniform float u_redFrom;   // where the red zone starts, in thousands
+uniform float u_flash;
+uniform sampler2D u_font;
+uniform vec2 u_grid;
+uniform vec2 u_cell;
+uniform vec4 u_ring[2];
+uniform vec4 u_mtr[2];
+uniform vec4 u_line[8];
+uniform float u_nline;
+uniform vec3 u_lit;
+uniform vec3 u_off;
+uniform vec3 u_frame;
+uniform vec3 u_red;
+uniform vec3 u_redOff;
+uniform vec3 u_trk;
+uniform vec3 u_ink;
+
+const float PERSP = 1.9;   // r thousand sits at ((r + LEAD) / (u_n + LEAD + 0.5)) ^ PERSP of the bar (fits the photo's spacing)
+const float LEAD = 0.6;
+const float SPLIT = 0.58;  // where the carbon column starts, outer edge 0 .. inner edge 1
+const float CORNER = 22.0; // the far outer corner's radius, px
+const float RAIL = 9.0;    // the white rails' width, px
+const float HOOK = 30.0;   // how far a tick's hook reaches in from the inner edge, px
+const float OUTLINE = 11.0; // the thin lines outside the bar, px off its sides
+const float PI = 3.14159265359;
+
+float cov(float d) { return clamp(0.5 - d, 0.0, 1.0); }
+float segd(vec2 p, vec2 a, vec2 b) {
+    vec2 ba = b - a;
+    float h = clamp(dot(p - a, ba) / max(dot(ba, ba), 0.001), 0.0, 1.0);
+    return length(p - a - ba * h);
+}
+
+void main() {
+    vec2 p = v_uv * u_size;
+    vec3 c = vec3(0.0);
+    float H = u_barY.y - u_barY.x;
+    float E = u_n + LEAD + 0.5;
+    // the bars: the right one folded onto the left one (rt 1 on the right). Distances in px: dO from the outer edge,
+    // dI from the inner edge (both > 0 inside), dy from the top
+    float rt = step(u_barY.z, p.x);
+    float px = rt > 0.5 ? 2.0 * u_barY.z - p.x : p.x;
+    float t = (p.y - u_barY.x) / H;
+    if (t > -0.06 && t < 1.04) {
+        float tc = clamp(t, 0.0, 1.0);
+        float xo = mix(u_bar.x, u_bar.z, tc), xi = mix(u_bar.y, u_bar.w, tc);
+        float dy = p.y - u_barY.x;
+        if (dy < CORNER) xo += CORNER - sqrt(max(0.0, CORNER * CORNER - (CORNER - dy) * (CORNER - dy)));
+        float w = xi - xo;
+        float dO = px - xo, dI = xi - px, dB = u_barY.y - p.y;
+        float tv = pow(clamp((u_val + LEAD) / E, 0.0, 1.0), PERSP);
+        float tr = pow((u_redFrom + LEAD) / E, PERSP);
+        bool red = tc >= tr;
+        bool on = tc <= tv && u_val > 0.0;
+        vec3 W = red ? u_red : u_frame;                      // the rails and lines: white, red in the red zone
+        // the nearest thousand: its row (yk) and distance
+        float kf = pow(tc, 1.0 / PERSP) * E - LEAD;
+        float k = floor(kf + 0.5);
+        float yk = pow((k + LEAD) / E, PERSP) * H;
+        float dk = abs(dy - yk);
+        bool tick = k >= 1.0 && k <= u_n;
+        // outside the bar: a thin line along each side, the outer one with a short tick per thousand
+        if (dy > 0.0 && dB > 0.0) {
+            c = mix(c, W * 0.6, cov(abs(dO + OUTLINE) - 0.8));
+            c = mix(c, W * 0.6, cov(abs(dI + OUTLINE) - 0.8));
+            if (tick) c = mix(c, W * 0.7, cov(dk - 0.9) * step(-OUTLINE - 10.0, dO) * step(dO, -3.0));
+        }
+        if (dO > 0.0 && dI > 0.0 && dy > 0.0 && dB > 0.0) {
+            float u = dO / w;                                // 0 outer edge .. 1 inner edge
+            bool carbon = u > SPLIT && dI > RAIL;
+            vec3 col;
+            if (on) {
+                vec3 L = u_flash > 0.5 || red ? u_red : u_lit;
+                float wv = mod(floor((p.x + p.y) / 6.0) + floor((p.x - p.y) / 6.0), 2.0);
+                col = carbon ? L * (0.84 + 0.08 * wv) : L;
+            } else if (red) {
+                // dark red under the number, the carbon column as bright red dots
+                vec2 q = mod(p, 7.0) - 3.5;
+                col = carbon ? mix(u_redOff * 0.35, u_red, cov(length(q) - 2.6)) : u_redOff * (0.22 + 0.3 * (1.0 - u));
+            } else {
+                float wv = mod(floor((p.x + p.y) / 5.0) + floor((p.x - p.y) / 5.0), 2.0);
+                col = carbon ? u_off * (0.38 + 0.4 * wv) : vec3(0.02);
+            }
+            vec3 ink = on ? u_ink : W * 0.62;
+            // a tick per thousand: across the carbon column to the inner rail's hook, and a short one at the outer rail
+            if (tick) col = mix(col, ink, cov(dk - 0.8) * step(SPLIT - 0.08, u));
+            // the number, from the glyph atlas, sized with the bar's width there
+            if (tick) {
+                float tk = yk / H;
+                float wk = mix(u_bar.y - u_bar.x, u_bar.w - u_bar.z, tk);
+                float gh = 0.27 * wk, gw = gh * u_cell.x;
+                float nx = mix(u_bar.x, u_bar.z, tk) + 0.34 * wk;
+                vec2 g = vec2((px - nx) / gw + 0.5, (dy - yk) / gh + 0.5);
+                if (rt > 0.5) g.x = 1.0 - g.x;                // the right bar's glyphs read the right way round
+                if (g.x > 0.0 && g.x < 1.0 && g.y > 0.0 && g.y < 1.0) {
+                    float code = u_cell.y + k;
+                    float gc = mod(code, u_grid.x), gr = floor(code / u_grid.x);
+                    float gi = texture2D(u_font, vec2((gc + g.x) / u_grid.x, (gr + g.y) / u_grid.y)).r;
+                    col = mix(col, on ? u_ink : (red ? u_red : u_frame), gi);
+                }
+            }
+            // the outer rail: a thick glossy white band up the outer edge that rounds into the top bar
+            float rail = min(dO, dy);
+            float gloss = 0.78 + 0.22 * sin(clamp(rail / RAIL, 0.0, 1.0) * PI);
+            col = mix(col, W * gloss, clamp(RAIL - rail + 0.5, 0.0, 1.0));
+            // the inner rail: one glossy piece per thousand, each topped by a hook into the carbon column at its tick, with
+            // a gap just above it
+            float gl = 0.8 + 0.2 * sin(clamp(dI / RAIL, 0.0, 1.0) * PI);
+            float seg = clamp(RAIL - dI + 0.5, 0.0, 1.0) * (1.0 - cov(abs(dy - yk + 5.0) - 1.5) * float(dy < yk && tick));
+            float hook = tick ? clamp(2.5 - abs(dy - yk - 1.0) + 0.5, 0.0, 1.0) * clamp(HOOK - dI + 0.5, 0.0, 1.0) : 0.0;
+            col = mix(col, W * gl, seg);
+            col = mix(col, W * 0.95, hook);
+            // the red zone's top: a thick red bar across the whole bar
+            col = mix(col, u_red, cov(abs(dy - tr * H) - 3.0));
+            c = col;
+        }
+        // the edge: antialias the outer and inner sides against the black
+        float edge = min(dO, dI);
+        if (edge > -1.0 && edge <= 0.0 && dy > 0.0 && dB > 0.0) c = mix(c, W * 0.8, 0.5 + 0.5 * edge);
+    }
+    // the ring gauges, after the Audi-style dials: a thick grey band (lit white clockwise from 6 o'clock) with a dark halo
+    // outside and a glossy white line along its inside, cut by black radial lines at 3, 9 and 12 o'clock, a red mark at 6
+    for (int i = 0; i < 2; i++) {
+        vec4 g = u_ring[i];
+        if (g.z <= 0.0) continue;
+        vec2 d = p - g.xy;
+        float r = length(d), R = g.z;
+        if (r > R + 17.0 || r < R - 12.0) continue;
+        float a = atan(-d.x, d.y);                       // 0 at 6 o'clock, clockwise
+        if (a < 0.0) a += 2.0 * PI;
+        float on = step(a, g.w * 2.0 * PI) * step(0.001, g.w);
+        float fine = mod(floor(p.x / 2.0) + floor(p.y / 2.0), 2.0);
+        float halo = clamp(R + 15.0 - r, 0.0, 1.0) * clamp(r - R - 8.0, 0.0, 1.0);
+        c = mix(c, vec3(0.13), halo);
+        float band = clamp(R + 8.5 - r, 0.0, 1.0) * clamp(r - R + 6.0, 0.0, 1.0);
+        float sh = 0.9 + 0.1 * (r - R + 6.0) / 14.5;      // a little lighter towards the outside
+        c = mix(c, on > 0.5 ? u_lit * (0.9 + 0.04 * fine) : u_trk * sh * (0.94 + 0.08 * fine), band);
+        float rim = cov(abs(r - R + 8.0) - 2.0);
+        c = mix(c, u_frame * (0.85 + 0.15 * cov(abs(r - R + 8.0) - 0.8)), rim);
+        // the black cuts at 9, 12 and 3 o'clock (a = PI/2, PI, 3 PI/2), across the halo, band and line
+        float q = mod(a, PI * 0.5);
+        q = min(q, PI * 0.5 - q);
+        float cut = cov(q * r - 1.0) * step(0.5, a) * step(a, 2.0 * PI - 0.5) * step(R - 11.0, r) * step(r, R + 15.0);
+        c = mix(c, vec3(0.0), cut);
+        // the red mark at 6 o'clock
+        float a0 = a > PI ? a - 2.0 * PI : a;
+        c = mix(c, u_red, cov(abs(a0) * r - 1.8) * step(R - 11.0, r) * step(r, R + 8.5));
+    }
+    // the segmented bars, 14 segments, 8 px tall
+    for (int i = 0; i < 2; i++) {
+        vec4 m = u_mtr[i];
+        if (m.z <= 0.0 || p.y < m.y || p.y > m.y + 8.0 || p.x < m.x || p.x > m.x + m.z) continue;
+        float sw = m.z / 14.0, f = (p.x - m.x) / sw;
+        float s = floor(f);
+        float in_ = step(f - s, 1.0 - 4.0 / sw);
+        c = mix(c, (s + 0.5) / 14.0 <= m.w + 0.001 && m.w > 0.0 ? u_lit : u_trk, in_);
+    }
+    // the lines
+    for (int i = 0; i < 8; i++) {
+        if (float(i) >= u_nline) break;
+        c = mix(c, u_frame, cov(segd(p, u_line[i].xy, u_line[i].zw) - 1.0));
+    }
+    gl_FragColor = vec4(c, 1.0);
+}
+`;
+
+module.exports = { shiftbar: SHIFTBAR, arc: ARC, revbar: REVBAR, lights: LIGHTS, fill: FILL, box: BOX, grid: GRID, segbar: SEGBAR, mdash: MDASH, mtach: MTACH, sdash: SDASH, boxes: BOXES, atext: ATEXT, meter: METER, gmeter: GMETER, revarc: REVARC, tiles: TILES, ribbon: RIBBON, deco: DECO, mview: MVIEW, vdash: VDASH, runway: RUNWAY };

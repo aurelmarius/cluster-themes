@@ -177,6 +177,20 @@ const THEMES = {
         deco: 0,
         greeting: '',
     },
+    // Runway (layout runway.json, Nov 19 2026): two rev bars leaning apart like a runway seen from the cockpit: white frames,
+    // ticks and numbers on black with a carbon column, lit white with the revs (the numbers dark), red past the redline;
+    // power and torque rings. Extra roles: barLit (a bar lit), barOff (the carbon column), redOff (the red zone unlit),
+    // ringTrack (a ring's unlit band).
+    runway: {
+        name: 'Runway',
+        fg: [240, 242, 246, 255], dim: [150, 156, 166, 255], track: [58, 62, 70, 255], arc: [240, 242, 246, 255],
+        glow: 0, stripe: false,
+        bar: { low: [240, 242, 246], mid: [240, 242, 246], high: [230, 30, 38], midAt: 'shift' },
+        rev: { from: [240, 242, 246], to: [240, 242, 246] },
+        bg: [0, 0, 0, 255], panel: [0, 0, 0, 255], line: [226, 229, 235, 255], head: [226, 228, 232, 255],
+        ink: [24, 24, 28, 255], accent: [230, 30, 38, 255], well: [0, 0, 0, 255],
+        barLit: [246, 247, 250, 255], barOff: [96, 100, 108, 255], redOff: [178, 16, 24, 255], ringTrack: [120, 124, 132, 255],
+    },
     ribbon_xmas: {
         name: 'Ribbon · Christmas',
         fg: [246, 241, 230, 255], dim: [127, 154, 136, 255], track: [29, 39, 51, 255], arc: [232, 194, 90, 255],

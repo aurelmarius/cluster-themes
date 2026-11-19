@@ -149,6 +149,14 @@
  *             3 Fourth of July, 4 New Year, 5 Thanksgiving; colours "decoColors" [3 rgb]) kept out of "keep" [[x0, y0, x1,
  *             y1] x up to 4]. The holiday comes from the "holiday" setting (shared/holidays.js): a layout whose theme has
  *             "holidays": true is drawn in "<theme>_<holiday>" while one is on.
+ *   runway    effect layer (shaders.js runway): the whole Runway theme's backdrop: black, two rev bars that lean apart towards
+ *             the driver, "bars" [outer x, inner x at the top, outer x, inner x at the bottom] (the left one; the right one is
+ *             its mirror about "barY"[2]) between rows "barY" [top y, bottom y, mirror x], lit from the top down to the revs
+ *             (0 .. the bar max + 500 rpm, the near thousands longer), red from the redline; "rings" (at most 2: { cx, cy, r,
+ *             slot }, lit clockwise from 6 o'clock by that readout slot's sensor), "mtrs" (at most 2: { x, y, w, slot }, 14
+ *             segments), "lines" (at most 8: [x0, y0, x1, y1]). Roles barLit, barOff (the carbon column), redOff, ringTrack,
+ *             line (the frames and ticks), ink (a number on a lit bar), hot. The bars' numbers are drawn by the shader from
+ *             the glyph atlas of "font" (w_num2), so they turn dark where the bar is lit.
  *   nav       image layer, always its own (never packed): turn-by-turn directions, Redline's (cauliflowermossgrape/
  *             idrive7-apps, MIT; shared/nav.js reads BMW's guidance service, shared/hud_nav.js draws the 200x76 picture:
  *             arrow, distance, street or lanes, "then", roundabouts). The picture is always 200x76; the widget's w / h
@@ -351,7 +359,7 @@ function mediaText(v) {
 /** Seconds as m:ss. */
 function clockOf(sec) { const t = Math.max(0, Math.floor(sec)); return Math.floor(t / 60) + ':' + ('0' + (t % 60)).slice(-2); }   // its speed scale: 0..200 mph by 20, 0..330 km/h by 30 (linear)
 const ROAD_DASH_M = 12;            // the Sport road: metres per dash and gap (shaders.js sdash u_road)
-const CUE_TYPES = { lights: true, shiftbar: true, revbar: true, revarc: true, ribbon: true, mtach: true };
+const CUE_TYPES = { lights: true, shiftbar: true, revbar: true, revarc: true, ribbon: true, mtach: true, runway: true };
 // the shift-light test (page.js Alerts): rpm climbs from TEST_FROM to just past the shift point, then holds
 const TEST_FROM = 1500, TEST_CLIMB_MS = 2500, TEST_HOLD_MS = 1200;
 // night colours (Cluster Themes "nightDim"): after sunset the theme's whites and greys go to this brightness
@@ -609,7 +617,7 @@ class HudApp {
     _setNeeds(shown) {
         this.shownW = shown;
         const ids = [];
-        shown.forEach((w) => [w].concat(Array.isArray(w.tiles) ? w.tiles : []).forEach((b) => {
+        shown.forEach((w) => [w].concat(Array.isArray(w.tiles) ? w.tiles : [], Array.isArray(w.rings) ? w.rings : [], Array.isArray(w.mtrs) ? w.mtrs : []).forEach((b) => {
             const sn = b && b.slot ? this.slotSensor(this.activeName, b.slot, this.layoutSlots) : null;
             if (sn) ids.push(sn.id);
         }));
@@ -1640,6 +1648,17 @@ class HudApp {
     /** Where the red and orange marks start on a rev scale that ends at `max` rpm, as fractions 0..1: red from the
      *  redline, but always covering at least the last 500 rpm (the M40i's scale ends right at its 7000 redline),
      *  orange over the 700 rpm before the red. */
+    /** 0..1 of the bar of whatever sensor readout slot `id` shows now (TILE_BAR; 0 without one or a value). */
+    _slotFrac(id) {
+        const sn = id ? this.slotSensor(this.activeName, id, this.layoutSlots) : null;
+        const bar = sn ? TILE_BAR[sn.id] : null;
+        if (!bar) return 0;
+        const mx = bar.max === 'rpm' ? this._barMax() : bar.max;
+        let raw = this._raw(bar.raw);
+        if (bar.abs && isNum(raw)) raw = Math.abs(raw);
+        return isNum(raw) && mx !== bar.min ? Math.min(1, Math.max(0, (raw - bar.min) / (mx - bar.min))) : 0;
+    }
+
     _redMarks(max) {
         const redFrom = Math.min(this.setting('redline'), max - 500) / max;
         return [redFrom, redFrom - 700 / max];
@@ -1669,6 +1688,8 @@ class HudApp {
             const kind = tok.slice(0, tok.indexOf(':')), sn = this.slotSensor(this.activeName, tok.slice(kind.length + 1), this.layoutSlots);
             if (kind === 'slot') return this.sensorValue(sn);
             if (kind === 'slotHead') return sn ? sn.head : '';
+            // the heading in title case, for a theme that writes its labels so (Runway's rings: "Power", "Torque")
+            if (kind === 'slotTitle') return sn ? sn.head.charAt(0) + sn.head.slice(1).toLowerCase() : '';
             if (kind === 'slotHeadS') return sn ? sn.short || sn.head : '';     // M's slot rows: LAST SHIFT -> SHIFTED
             // the heading with the unit, for a slot with no unit of its own: "FUEL %" (a temperature's ° is on its value)
             if (kind === 'slotHeadU') { const u = sn && !sn.suffix ? this.sensorUnit(sn) : ''; return sn ? sn.head + (u ? ' ' + u : '') : ''; }
@@ -2155,6 +2176,32 @@ class HudApp {
             c.uniform(ref, 'u_panel', pn ? [pn[0][0] - w.x, pn[0][1] - w.y, pn[1][0] - w.x, pn[1][1] - w.y] : [0, 0, 0, 1]);
             c.uniform(ref, 'u_panelB', pn ? [pn[2][0] - w.x, pn[2][1] - w.y, pn[3], 0] : [0, 2, 0, 0]);
             c.uniform(ref, 'u_oval', [isNum(w.holeOval) ? w.holeOval : 0]);
+        } else if (w.type === 'runway') {
+            const B = w.bars, Y = w.barY, max = this._barMax();
+            const ln = [];
+            (w.lines || []).slice(0, 8).forEach((g) => ln.push(g[0] - w.x, g[1] - w.y, g[2] - w.x, g[3] - w.y));
+            const nline = ln.length / 4;
+            while (ln.length < 32) ln.push(0);
+            c.uniform(ref, 'u_size', [w.w, w.h]);
+            c.uniform(ref, 'u_bar', [B[0] - w.x, B[1] - w.x, B[2] - w.x, B[3] - w.x]);
+            c.uniform(ref, 'u_barY', [Y[0] - w.y, Y[1] - w.y, Y[2] - w.x]);
+            c.uniform(ref, 'u_n', [max / 1000]);
+            c.uniform(ref, 'u_redFrom', [Math.min(this.setting('redline'), max - 500) / 1000]);
+            c.uniform(ref, 'u_line', ln, { type: 'vec4' });
+            c.uniform(ref, 'u_nline', [nline]);
+            c.uniform(ref, 'u_lit', rgb(color(t, 'barLit')));
+            c.uniform(ref, 'u_off', rgb(color(t, 'barOff')));
+            c.uniform(ref, 'u_frame', rgb(t.line));
+            c.uniform(ref, 'u_red', rgb(t.hot));
+            c.uniform(ref, 'u_redOff', rgb(color(t, 'redOff')));
+            c.uniform(ref, 'u_trk', rgb(color(t, 'ringTrack')));
+            c.uniform(ref, 'u_ink', rgb(t.ink));
+            c.uniform(ref, 'u_flash', [0]);
+            // the bars' numbers come from the glyph atlas of "font" (digits), drawn by the shader so they turn dark when lit
+            const a = this._atlas(w.font || 'w_num2', x.ci);
+            c.bind(ref, 'u_font', a.ref);
+            c.uniform(ref, 'u_grid', [a.cols, a.rows]);
+            c.uniform(ref, 'u_cell', [a.cellW / a.cellH, a.chars.indexOf('0')]);
         } else if (w.type === 'vdash') {
             // the bracket lines (target px): [x0, y0, x1, y1, width, brightness 0..1]
             const seg = [], segW = [];
@@ -2736,6 +2783,22 @@ class HudApp {
             x.c.uniform(x.ref, 'u_rpm', [vals[1]]);
             x.c.uniform(x.ref, 'u_fuel', [vals[2]]);
             x.c.uniform(x.ref, 'u_oil', [vals[3]]);
+        } else if (w.type === 'runway') {
+            const E = this._barMax() / 1000 + 0.5, q = (v) => Math.round(Math.min(1, Math.max(0, v)) * 400) / 400;
+            const rpm = this._raw('rpm');
+            const rings = [0, 1].map((i) => (w.rings || [])[i]), mtrs = [0, 1].map((i) => (w.mtrs || [])[i]);
+            const rv = rings.map((g) => (g ? q(this._slotFrac(g.slot)) : 0)), mv = mtrs.map((m) => (m ? q(this._slotFrac(m.slot)) : 0));
+            const vr = isNum(rpm) ? q(rpm / 1000 / E) * E : 0;      // thousands, in 1/400 steps of the scale
+            const key = [vr, this.flash ? 1 : 0].concat(rv, mv).join('|');
+            if (!force && key === x.last) return;
+            x.last = key;
+            x.c.uniform(x.ref, 'u_val', [vr]);
+            x.c.uniform(x.ref, 'u_flash', [this.flash ? 1 : 0]);
+            const ru = [], mu = [];
+            rings.forEach((g, i) => ru.push(g ? g.cx - w.x : 0, g ? g.cy - w.y : 0, g ? g.r : 0, rv[i]));
+            mtrs.forEach((m, i) => mu.push(m ? m.x - w.x : 0, m ? m.y - w.y : 0, m ? m.w : 0, mv[i]));
+            x.c.uniform(x.ref, 'u_ring', ru, { type: 'vec4' });
+            x.c.uniform(x.ref, 'u_mtr', mu, { type: 'vec4' });
         } else if (w.type === 'vdash') {
             const T = w.tach, q = (v) => Math.round(Math.min(1, Math.max(0, v)) * 400) / 400;
             const frac = (g) => { const v = g && g.signal ? this._raw(g.signal) : null; return isNum(v) ? q((v - g.min) / (g.max - g.min)) : 0; };

@@ -2,6 +2,12 @@
 
 Newest first. Dates are when the build was pushed.
 
+## Nov 19 2026
+
+- **Cluster Themes 0.20.0:**
+  - **New theme: Runway.** Two rev bars that lean apart towards you like a runway seen from the cockpit: white rails with a thin line outside, numbers per thousand, a carbon-weave column on the inner side, red from the redline. They light white from the far end down to the revs, the numbers turning dark. READY, the gear, the drive mode and the speed sit between them. Power and torque rings on the right, a G-meter on the left (or four readouts: Settings, Runway: left panel), the range and the song playing along the top, and coolant and boost bars, the clock and the outside temperature along the bottom. Every ring, bar and left-hand readout can show another sensor (Readouts tab). No map window.
+  - Not yet tested on a car.
+
 ## Nov 15 2026
 
 - **Cluster Themes 0.19.0, HUD Widgets 0.15.0:**

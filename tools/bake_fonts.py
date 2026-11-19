@@ -107,6 +107,14 @@ CLUSTER_FONTS = [
     ('b_unit', 'Outfit[wght].ttf', 26, UPPER + LOWER + '/', 0, 'Medium'),
     ('b_gear', 'Outfit[wght].ttf', 32, DIGITS + 'PRNDSM-', 0, 'SemiBold'),
     ('b_scale', 'Outfit[wght].ttf', 20, DIGITS, 0, 'Medium'),
+    # Runway (Nov 19 2026): Outfit Medium, a calm modern sans: the big gear and speed between the twin rev bars, the bars'
+    # numbers (the shader scales them with the bar), readout values, labels, the now playing line in the top bar
+    ('w_big', 'Outfit[wght].ttf', 130, DIGITS + 'PRNDSM-', 0, 'Medium'),
+    ('w_num2', 'Outfit[wght].ttf', 44, DIGITS, 0, 'Medium'),
+    ('w_val', 'Outfit[wght].ttf', 40, DIGITS + '.:-+°% ', 0, 'Medium'),
+    ('w_mid', 'Outfit[wght].ttf', 64, DIGITS + '.:-+°% ', 0, 'Medium'),
+    ('w_label', 'Outfit[wght].ttf', 24, UPPER + LOWER + DIGITS + ' /.:-+°%', 0, 'Medium'),
+    ('w_title', 'Outfit[wght].ttf', 34, ''.join(chr(i) for i in range(32, 127)), 0, 'Medium'),
 ]
 FONTS = {'idrive_hud_widgets': HUD_FONTS, 'cluster_themes': CLUSTER_FONTS}
 PAD = 2
