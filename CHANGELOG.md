@@ -2,6 +2,10 @@
 
 Newest first. Dates are when the build was pushed.
 
+## Nov 20 2026
+
+- **Cluster Themes 0.20.1, HUD Widgets 0.15.1:** install again on head units that refused them with "its SOME/IP manifest asks for what the unit does not have (de.bmw.infotainment.hmi.hmimediastate.HmiMediaState: instance "1" ...)". The now playing for the Vector music panel (and Runway's top bar) is read from the front screen's instance, HMI_CID, which is what the head unit offers.
+
 ## Nov 19 2026
 
 - **Cluster Themes 0.20.0:**

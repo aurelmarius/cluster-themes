@@ -348,6 +348,7 @@ const MVIEW_RPM = 8000;            // the M view theme's rev scale: 0..8
 const MVIEW_SPEED = { us: 200, metric: 330 };
 const VDASH_RPM = 8000;            // the Vector theme's rev counter: 0..8
 const MEDIA_IF = 'de.bmw.infotainment.hmi.hmimediastate.HmiMediaState';   // the head unit's now playing (front)
+const MEDIA_INST = 'HMI_CID';      // its front screen instance (the rear screens are HMI_FoMo_Left / _Right)
 const MEDIA_TYPES = { 1: 'ARTIST', 2: 'ALBUM', 3: 'TITLE' };
 /** A song's text for the baked fonts: accents dropped, curly quotes and dashes made plain, the rest left out. */
 function mediaText(v) {
@@ -804,8 +805,11 @@ class HudApp {
         };
         // now playing (the Vector layouts' music panel): the head unit's own media state, front screen only. Optional
         // (app.json): not every unit may have it, and whether CarPlay fills it is not known yet. Added last, so the
-        // one-at-a-time SOME/IP setup (signals.js) reaches every vehicle signal before it, whatever this one does
+        // one-at-a-time SOME/IP setup (signals.js) reaches every vehicle signal before it, whatever this one does.
+        // The front screen's instance is HMI_CID (Nov 20 2026: an MGU offers HMI_CID, HMI_FoMo_Left and HMI_FoMo_Right, no
+        // "1", and the Store refused 0.20.0 for asking for "1"); app.json "_instances" names the same
         extra[MEDIA_IF] = {
+            $instance: MEDIA_INST,
             playerMetadata: (v) => this._mediaFeed('meta', v),
             trackProgress: (v) => this._mediaFeed('progress', v),
         };
