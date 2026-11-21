@@ -2,11 +2,23 @@
 
 Newest first. Dates are when the build was pushed.
 
-## Nov 19 2026
+## Nov 21 2026
 
-- **Cluster Themes 0.20.0:**
+- **Cluster Themes 0.20.1:**
   - **New theme: Runway.** Two rev bars that lean apart towards you like a runway seen from the cockpit: white rails with a thin line outside, numbers per thousand, a carbon-weave column on the inner side, red from the redline. They light white from the far end down to the revs, the numbers turning dark. READY, the gear, the drive mode and the speed sit between them. Power and torque rings on the right, a G-meter on the left (or four readouts: Settings, Runway: left panel), the range and the song playing along the top, and coolant and boost bars, the clock and the outside temperature along the bottom. Every ring, bar and left-hand readout can show another sensor (Readouts tab). No map window.
   - Not yet tested on a car.
+- **Cluster Themes 0.19.4, HUD Widgets 0.15.4: both apps start with the car** (issue #16). The car now starts them by itself when it starts, so the theme and the HUD layout come up without you opening the app first. You only need to open them to change something. Not yet tested on a car: if the theme doesn't come up by itself, or the app's page won't open after that, please say so in #16.
+- **Cluster Themes 0.19.3, HUD Widgets 0.15.3:** a safety net for installing. When the Store builds the app on your car, anything your car's software doesn't have (a signal, or one way of reading it) is now left out of that build, instead of the Store refusing the whole app as it did with 0.19.0. The app then runs without that one readout and says so in its log. Nothing changes on cars that have everything. This comes from the MGU App Kit, which alexpereap pointed to in #26. Not yet tested on a car.
+
+## Nov 20 2026
+
+- **Cluster Themes 0.19.2, HUD Widgets 0.15.2:**
+  - **Plug-in hybrids switch with the drive mode** (issue #31): Sport and Sport Plus pick your Sport theme or layout, Hybrid, Electric and Battery Control count as Comfort, and Hybrid Eco Pro as Eco Pro. Before, a plug-in hybrid's modes weren't recognised and nothing switched. Thanks to the reporter of #31 for finding the values on a 330e. Other cars switch as before.
+  - **Temperature and pressure units of their own** (issues #24, #32): two new settings under Units in Cluster Themes, Temperature (°C or °F) and Pressure (bar or psi), for mph with °C and psi as in the UK. Both start on Match speed, so nothing changes until you pick one. HUD Widgets keeps its one Units setting.
+  - **Leave BMW's bottom strip clear** (Cluster Themes, off by default): for cars where BMW still draws two black boxes over the theme, like M cars and the G22 4 Series (issues #11, #1). The theme then ends just above BMW's bottom strip, and BMW shows its own clock, range and outside temperature there. Nothing is squeezed or shrunk.
+  - The Settings tab's rows get a little shorter on smaller screens so all of them fit.
+  - Not yet tested on a car.
+- **Cluster Themes 0.19.1, HUD Widgets 0.15.1:** fixes the Store refusing to install 0.19.0 and 0.15.0 on some cars ("instance "1" is not on this unit"). The music panel now asks the car for the front screen's now playing by the name the car uses. Nothing else changes. Not yet tested on a car.
 
 ## Nov 15 2026
 

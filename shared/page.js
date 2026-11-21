@@ -89,7 +89,7 @@ class Page {
         const s = this.item(k), v = this.get(k);
         if (!s) return '';
         if (s.type === 'bool') return v ? 'On' : 'Off';
-        if (s.type === 'number' && WARN_KEYS.indexOf(k) >= 0) return warnText(k, v, this.get('units') === 'us');
+        if (s.type === 'number' && WARN_KEYS.indexOf(k) >= 0) return warnText(k, v, sensors.imperial((x) => this.get(x), k === 'warnBoost' ? 'pressure' : 'temp'));
         if (k === 'timeZone') return tzText(v);
         if (k === 'tankLitres') return fmtInt(v) + ' L';
         if (s.type === 'number') return k === 'shiftBefore' ? (v ? fmtInt(v) + ' rpm before' : 'At the redline') : fmtInt(v) + ' rpm';
@@ -508,7 +508,7 @@ class Page {
         if (this.item('smartTemps')) {
             label(cv, x, y, 'Temperatures');
             y = this.toggleRow(cv, x, y + 14, w, 'Only when they matter', 'smartTemps');
-            note(cv, x, y + 22, ['Oil and coolant show only while cold,', 'warming up or hot. Outside: blue at ' + (this.get('units') === 'us' ? '37 °F.' : '3 °C.')]);
+            note(cv, x, y + 22, ['Oil and coolant show only while cold,', 'warming up or hot. Outside: blue at ' + (sensors.imperial((x) => this.get(x), 'temp') ? '37 °F.' : '3 °C.')]);
             y += 84;
         }
         if (this.item('navDirections')) {
@@ -609,10 +609,11 @@ class Page {
         // under the right column while "Change with the drive mode" is on
         const diag = this.hud.modeDiagLines ? this.hud.modeDiagLines(this.cfg.modeCheck || []) : [];
         // the page's room depends on the screen (bottom 512 without extra room below it): compact rows (46 high,
-        // 52 apart) when the full ones, the drive mode check and the status line don't all fit
+        // 52 apart) when the full ones, the drive mode check and the status line don't all fit, tight ones (40, 46)
+        // when even those don't (Cluster Themes' 14 rows with the check on)
         const fits = (h, pitch) => 84 + (per - 1) * pitch + h <= bottom - 24 &&
             84 + (keys.length - per) * pitch + 10 + 20 * diag.length <= bottom - 24;
-        const h = fits(56, 64) ? 56 : 46, pitch = h === 56 ? 64 : 52;
+        const [h, pitch] = fits(56, 64) ? [56, 64] : fits(46, 52) ? [46, 52] : [40, 46];
         keys.forEach((k, i) => {
             const x = CX + (i < per ? 0 : colW + 24), y = 84 + (i % per) * pitch;
             if (y + h > bottom) return;
@@ -633,7 +634,7 @@ class Page {
     }
 
     /* ---------- rows ---------- */
-    /** A row's card (h: 56, or 46 for the compact ones); returns its text baseline. */
+    /** A row's card (h: 56, or 46 / 40 for the compact and tight ones); returns its text baseline. */
     rowBox(cv, x, y, w, name, h) {
         glass(cv, x, y, w, h, false);
         const base = y + h / 2 + 7;

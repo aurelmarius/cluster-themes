@@ -413,11 +413,28 @@ function mEngineModeOf(v) {
     return n === 1 ? { mode: 'comfort', variant: null } : n === 2 ? { mode: 'sport', variant: null } : n === 3 ? { mode: 'sport', variant: 'plus' } : null;
 }
 
-function driveVariantOf(raw) {
+/**
+ * FES's drive mode (ActualValueModeDrivingExperience2, the unit's catalog) as a name without the plug-in hybrids'
+ * PHEV_ prefix, from the name or the wire number; null for none (0, 61..63) or an unknown value. Plug-in hybrids send
+ * 15..23 (issue #31: 15, 16, 17 and 23 seen on a 330e); 11..14 (off-road), 24, 27 and 28 are not drive modes here
+ * except BOOST, which counts as Sport.
+ */
+const DRIVE_MODE_NAMES = {
+    1: 'SPORT_DYNAMIC', 2: 'SPORT_EXPERT', 3: 'SPORT_INDIVIDUAL', 4: 'COMFORT', 5: 'COMFORT_PLUS', 6: 'COMFORT_INDIVIDUAL',
+    7: 'ECO_PRO_EFFICIENT', 8: 'ECO_PRO_PLUS', 9: 'ECO_PRO_INDIVIDUAL', 10: 'ADAPTIVE',
+    15: 'PHEV_SPORT_STANDARD', 16: 'PHEV_SPORT_INDIVIDUAL', 17: 'PHEV_HYBRID_STANDARD', 18: 'PHEV_HYBRID_ECO',
+    19: 'PHEV_HYBRID_COMFORT', 20: 'PHEV_ELECTRIC_STANDARD', 21: 'PHEV_ELECTRIC_INDIVIDUAL', 22: 'PHEV_BATTERYCONTROL',
+    23: 'PHEV_SPORT_PLUS', 28: 'BOOST',
+};
+function driveModeName(raw) {
     const v = typeof raw === 'string' && /^\d+$/.test(raw.trim()) ? Number(raw.trim()) : raw;
-    if (typeof v === 'number') return v === 2 || v === 5 || v === 8 ? 'plus' : v === 3 || v === 6 || v === 9 ? 'individual' : null;
-    if (typeof v !== 'string') return null;
-    return /PLUS|EXPERT/i.test(v) ? 'plus' : /INDIVID/i.test(v) ? 'individual' : null;
+    const name = typeof v === 'number' ? DRIVE_MODE_NAMES[v] : typeof v === 'string' ? v.trim().toUpperCase() : null;
+    return name ? name.replace(/^PHEV_/, '') : null;
+}
+
+function driveVariantOf(raw) {
+    const u = driveModeName(raw);
+    return !u ? null : /PLUS|EXPERT/.test(u) ? 'plus' : /INDIVID/.test(u) ? 'individual' : null;
 }
 
 /** The M theme's setup rows: what each part is set to in a drive mode (they follow the mode buttons). */
@@ -432,19 +449,14 @@ const SETUP = {
 const SETUP_LEVEL = { EFFICIENT: 1, COMFORT: 1, SPORT: 2, 'SPORT PLUS': 3, INDIVIDUAL: 0 };
 
 function driveModeOf(raw) {
-    let v = raw;
-    if (typeof v === 'string' && /^\d+$/.test(v.trim())) v = Number(v.trim());
-    if (typeof v === 'number') {
-        if (v >= 1 && v <= 3) return 'sport';
-        if (v >= 7 && v <= 9) return 'eco';
-        if ((v >= 4 && v <= 6) || v === 10) return 'comfort';
-        return null;
-    }
-    if (typeof v !== 'string') return null;
-    const u = v.trim().toUpperCase();
-    if (u.indexOf('SPORT') === 0) return 'sport';
-    if (u.indexOf('ECO') === 0 || u.indexOf('EFFICIEN') === 0) return 'eco';
-    if (u.indexOf('COMFORT') === 0 || u.indexOf('ADAPTIVE') === 0) return 'comfort';
+    // plug-in hybrids: Sport and Sport Plus are Sport; Hybrid, Electric and Battery Control count as Comfort, except
+    // Hybrid Eco Pro (Eco)
+    const u = driveModeName(raw);
+    if (!u) return null;
+    if (u.indexOf('SPORT') === 0 || u === 'BOOST') return 'sport';
+    if (u.indexOf('ECO') === 0 || u.indexOf('EFFICIEN') === 0 || u === 'HYBRID_ECO') return 'eco';
+    if (u.indexOf('COMFORT') === 0 || u.indexOf('ADAPTIVE') === 0 || u.indexOf('HYBRID') === 0 || u.indexOf('ELECTRIC') === 0
+        || u === 'BATTERYCONTROL') return 'comfort';
     return null;
 }
 
@@ -631,8 +643,7 @@ class HudApp {
     sensorValue(sn) { return sn ? this._token(sn.tok) : '--'; }
     sensorUnit(sn) {
         if (!sn) return '';
-        const us = this.setting('units') === 'us';
-        return sn.unit ? sn.unit(us) : this._token('ampm');
+        return sn.unit ? sn.unit(this._us(sn.unit.kind)) : this._token('ampm');
     }
 
     /* ---------------- the HUD's place ---------------- */
@@ -697,6 +708,9 @@ class HudApp {
     }
     /** Where the HUD sits now, for the page: { x, y, scale, box } (box: the layout's own, unmoved). */
     placeInfo() { return { x: this._offset().x, y: this._offset().y, scale: this._scale(), box: this._placedBox() }; }
+
+    /** Whether `kind` ('temp', 'pressure', else speed and the rest) shows in US units (sensors.imperial). */
+    _us(kind) { return sensors.imperial((k) => this.setting(k), kind); }
 
     /** A setting's value, or its default when the saved value isn't one the schema allows. */
     setting(key) {
@@ -806,6 +820,7 @@ class HudApp {
         // (app.json): not every unit may have it, and whether CarPlay fills it is not known yet. Added last, so the
         // one-at-a-time SOME/IP setup (signals.js) reaches every vehicle signal before it, whatever this one does
         extra[MEDIA_IF] = {
+            $instance: 'HMI_CID',        // the front screen (the unit names its instances; there is no "1")
             playerMetadata: (v) => this._mediaFeed('meta', v),
             trackProgress: (v) => this._mediaFeed('progress', v),
         };
@@ -1682,7 +1697,7 @@ class HudApp {
 
     /** {{token}} -> display text. */
     _token(tok) {
-        const us = this.setting('units') === 'us';
+        const us = this.setting('units') === 'us', usT = this._us('temp'), usP = this._us('pressure');
         const fix = (v, n) => (isNum(v) ? v.toFixed(n) : '--');
         if (tok.indexOf('slot') === 0 && tok.indexOf(':') > 0) {
             const kind = tok.slice(0, tok.indexOf(':')), sn = this.slotSensor(this.activeName, tok.slice(kind.length + 1), this.layoutSlots);
@@ -1696,12 +1711,12 @@ class HudApp {
             if (kind === 'slotUnit') return this.sensorUnit(sn);
             if (kind === 'slotSuffix') return sn && sn.suffix ? sn.suffix : '';
         }
-        if (tok.indexOf('tyreP:') === 0) { const v = this._tyre('p', tok.slice(6)); return isNum(v) ? (us ? fix(v * 14.5038, 0) : fix(v, 1)) : '--'; }
-        if (tok.indexOf('tyreT:') === 0) { const v = this._tyre('t', tok.slice(6)); return isNum(v) ? String(Math.round(us ? v * 9 / 5 + 32 : v)) : '--'; }
+        if (tok.indexOf('tyreP:') === 0) { const v = this._tyre('p', tok.slice(6)); return isNum(v) ? (usP ? fix(v * 14.5038, 0) : fix(v, 1)) : '--'; }
+        if (tok.indexOf('tyreT:') === 0) { const v = this._tyre('t', tok.slice(6)); return isNum(v) ? String(Math.round(usT ? v * 9 / 5 + 32 : v)) : '--'; }
         switch (tok) {
-            case 'u:pressure': return us ? 'psi' : 'bar';
-            case 'intake': { const v = this._raw('intake'); return fix(isNum(v) ? (us ? v * 9 / 5 + 32 : v) : v, 0); }
-            case 'boostPeak': { const v = this.boostPeak; return us ? fix(isNum(v) ? v * 14.5038 : v, 1) : fix(v, 2); }
+            case 'u:pressure': return usP ? 'psi' : 'bar';
+            case 'intake': { const v = this._raw('intake'); return fix(isNum(v) ? (usT ? v * 9 / 5 + 32 : v) : v, 0); }
+            case 'boostPeak': { const v = this.boostPeak; return usP ? fix(isNum(v) ? v * 14.5038 : v, 1) : fix(v, 2); }
             case 'run': { const v = this.runs.shown(Date.now()); return isNum(v) ? v.toFixed(this.runs.state === 'run' ? 1 : 2) : '0.00'; }
             case 'runBest': { const v = this.runs.best[us ? 'us' : 'metric']; return v > 0 ? v.toFixed(2) : '-.--'; }
             case 'runState': return this.runs.word();
@@ -1717,16 +1732,16 @@ class HudApp {
             case 'speed2': { const v = this._raw('speed'); return fix(isNum(v) ? (us ? v : v * 0.621371) : v, 0); }   // the other unit
             case 'u:speed2Lc': return us ? 'km/h' : 'mph';
             case 'u:speed2': return us ? 'KM/H' : 'MPH';
-            case 'oil': case 'coolant': { const v = this._raw(tok); return fix(isNum(v) ? (us ? v * 9 / 5 + 32 : v) : v, 0); }
-            case 'boost': { const v = this._raw('boost'); return us ? fix(isNum(v) ? v * 14.5038 : v, 1) : fix(v, 2); }
-            case 'u:boost': return us ? 'PSI' : 'BAR';
-            case 'u:boostLc': return us ? 'psi' : 'bar';
+            case 'oil': case 'coolant': { const v = this._raw(tok); return fix(isNum(v) ? (usT ? v * 9 / 5 + 32 : v) : v, 0); }
+            case 'boost': { const v = this._raw('boost'); return usP ? fix(isNum(v) ? v * 14.5038 : v, 1) : fix(v, 2); }
+            case 'u:boost': return usP ? 'PSI' : 'BAR';
+            case 'u:boostLc': return usP ? 'psi' : 'bar';
             case 'holiday': return this.theme.greeting || '';
             case 'greeting': {                  // the HUD's holiday greeting (hud_holiday.js), only while the car stands
                 const sp = this.car.data().speed;
                 return this.theme.hudGreeting && isNum(sp) && sp < 3 ? this.theme.hudGreeting : '';
             }
-            case 'u:temp': return us ? '°F' : '°C';
+            case 'u:temp': return usT ? '°F' : '°C';
             case 'u:speedLc': return us ? 'mph' : 'km/h';
             case 'u:distLc': return us ? 'mi' : 'km';
             case 'u:dist': return us ? 'MI' : 'KM';
@@ -1735,7 +1750,7 @@ class HudApp {
             case 'ambient': {
                 const v = this._raw('ambient');
                 if (!isNum(v)) return '--';
-                const n = Math.round(us ? v * 9 / 5 + 32 : v);
+                const n = Math.round(usT ? v * 9 / 5 + 32 : v);
                 return (n > 0 ? '+' : '') + n;
             }
             case 'u:torque': return us ? 'lb-ft' : 'Nm';
@@ -1747,11 +1762,11 @@ class HudApp {
             }
             case 'hvSoc': { const v = this._raw('hvSoc'); return isNum(v) ? String(Math.round(v)) : '--'; }
             case 'fuelPct': { const v = this._raw('fuel'); return isNum(v) ? String(Math.round(v * 100)) : '--'; }
-            case 'ambientN': { const v = this._raw('ambient'); return isNum(v) ? String(Math.round(us ? v * 9 / 5 + 32 : v)) : '--'; }
+            case 'ambientN': { const v = this._raw('ambient'); return isNum(v) ? String(Math.round(usT ? v * 9 / 5 + 32 : v)) : '--'; }
             case 'torque': { const v = this._raw('torque'); return fix(isNum(v) ? (us ? v * 0.737562 : v) : v, 0); }
             case 'torquePct': case 'powerPct': { const v = this._raw(tok); return isNum(v) ? String(Math.min(100, Math.round(v))) : '--'; }
-            case 'boostHi': return us ? '20' : '1.4';
-            case 'boostMid': return us ? '10' : '0.7';
+            case 'boostHi': return usP ? '20' : '1.4';
+            case 'boostMid': return usP ? '10' : '0.7';
             case 'ampmLc': return this._token('ampm').toLowerCase();
             case 'gLat': case 'gLong': { const v = this._raw(tok); return isNum(v) ? Math.abs(v).toFixed(2) : '--'; }
             case 'gSide': case 'gFwd': {
@@ -1809,7 +1824,7 @@ class HudApp {
             }
             default:
                 if (tok.indexOf('spd:') === 0) { const v = SPEED_SCALE[us ? 'us' : 'metric'][Number(tok.slice(4))]; return v === undefined ? '' : String(v); }   // speed scale labels
-                if (tok.indexOf('temp:') === 0) { const c = Number(tok.slice(5)); return isNum(c) ? String(us ? Math.round((c * 9 / 5 + 32) / 10) * 10 : Math.round(c)) : '--'; }   // gauge labels: °F to the 10
+                if (tok.indexOf('temp:') === 0) { const c = Number(tok.slice(5)); return isNum(c) ? String(usT ? Math.round((c * 9 / 5 + 32) / 10) * 10 : Math.round(c)) : '--'; }   // gauge labels: °F to the 10
                 if (tok.indexOf('setup:') === 0) { const s = this._setup(); return s ? s[tok.slice(6)] || '' : '--'; }
                 if (tok.indexOf('signal:') === 0) { const v = this._raw(tok.slice(7)); return isNum(v) ? (Math.round(v * 10) / 10).toString() : '--'; }
                 return '{{' + tok + '}}';
@@ -1915,10 +1930,14 @@ class HudApp {
         this.log.info('layout "' + layout.name + '", theme ' + this.theme.name + (this.layoutTheme ? '' : ' (' + this.setting('hudTheme') + ')'));
         // full screen (Nov 14 2026): the layout's strip widgets (design/genlib.py full_screen) cover BMW's strip except a
         // window over its gear letter, and the theme's own strip row ("stripRow" l / r) shows the clock, range and outside
-        // temperature. "Leave BMW's bottom strip clear" is gone again (0.17.7): with the gear letter uncovered BMW draws no
-        // black box (car test of 0.17.6), so the switch had nothing left to fix.
+        // temperature. With the gear letter uncovered BMW draws no black box on our X3 (car test of 0.17.6), but M cars and
+        // the G22 still get two (issues #11, #1): "Leave BMW's bottom strip clear" (keepStrip, off by default) leaves the
+        // strip widgets out, so the theme ends with its backdrop at y 660 and BMW's own strip shows under it, nothing
+        // squeezed (the 0.17.x switch scaled the theme and uncovered BMW's dials; its key stripClear is not reused).
         // Copies, since the strip row's connection is set below.
-        const shown = layout.widgets.filter((w) => !(w.toggle && !this._toggleOn(w.toggle)) && !(w.themes && w.themes.indexOf(this.themeName) < 0))
+        const keepStrip = this.setting('keepStrip') === true;
+        const shown = layout.widgets.filter((w) => !(w.toggle && !this._toggleOn(w.toggle)) && !(w.themes && w.themes.indexOf(this.themeName) < 0)
+            && !(keepStrip && w.stripRow))
             .map((w) => (w.stripRow ? Object.assign({}, w) : w));
         this.shown = shown;              // for a scale to find its rev bar (driver camera wings)
         this._setNeeds(shown);

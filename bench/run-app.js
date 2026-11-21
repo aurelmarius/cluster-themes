@@ -35,7 +35,8 @@ process.on('uncaughtException', (e) => { log.error('uncaught (the car would exit
 
 try { fs.mkdirSync(dataDir); } catch (e) { /* there */ }
 const { headUnit } = require(path.join(__dirname, '..', 'kit', 'tools', 'hu-stub.js'));
-const hu = headUnit(stage, { live: true, dataDir, log, image: () => Promise.resolve() });
+// BENCH_NO_SCREENS=1: started as the car starts an "autostart" app, without its screens (issue #16)
+const hu = headUnit(stage, { live: true, dataDir, log, image: () => Promise.resolve(), noScreens: process.env.BENCH_NO_SCREENS === '1' });
 const { spec, settings, ui } = hu;
 // a stand-in for BMW's guidance service (the HUD's directions), driven by POST /nav (fake-nav.js)
 const fakeNav = require('./fake-nav').install(hu, log);
