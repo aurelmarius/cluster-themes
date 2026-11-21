@@ -47,7 +47,7 @@ Each app has its own page on the center screen, opened from the apps menu. Pick 
 
 1. Install **cluster-render** first. Both apps draw through it. It comes from the `robertnisipeanu/idrive-apps` Store source. With version 0.5.1 or newer, a cluster theme and a HUD layout can show at the same time.
 2. In the Store, go to **Settings, Add source**, enter **`bimmer-lab/apps`**, and install the apps you want.
-3. Open the app from the apps menu on the center screen to pick a theme or layout.
+3. Open the app from the apps menu on the center screen to pick a theme or layout. After that, both apps start with the car by themselves; you only open them again to change something.
 4. The head unit's clock runs on UTC, so set **Settings, Time zone (clock)** to your zone once (for example US Eastern). Named zones change for daylight saving by themselves.
 
 The Store builds each app on the car from this repo. No BMW code is in it. Both apps are tested on a 2020 X3 M40i; each app's page says what has been checked on the car and what is still open. Version history is in [CHANGELOG.md](CHANGELOG.md).
